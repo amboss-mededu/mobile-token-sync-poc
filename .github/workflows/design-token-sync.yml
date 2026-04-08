@@ -1,0 +1,62 @@
+name: Sync design tokens from design-system
+
+on:
+  repository_dispatch:
+    types: [design-tokens-update]
+
+jobs:
+  sync-tokens:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Checkout design-system at the dispatched SHA
+        uses: actions/checkout@v4
+        with:
+          repository: amboss-mededu/amboss-design-system
+          ref: ${{ github.event.client_payload.sha }}
+          path: design-system
+          sparse-checkout: |
+            packages/tokens-ios
+          sparse-checkout-cone-mode: false
+
+      - name: Copy token files
+        run: |
+          # ---------------------------------------------------------------
+          # FILE MAPPING — edit this section to match your repo structure
+          # Format: cp <source in design-system> <target in this repo>
+          # ---------------------------------------------------------------
+          cp design-system/packages/tokens-ios/Sources/AmbossDesignTokens/DesignSystemColorTokens.swift \
+             tokens/ios/DesignSystemColorTokens.swift
+
+          cp design-system/packages/tokens-ios/Sources/AmbossDesignTokens/DesignSystemVariables.swift \
+             tokens/ios/DesignSystemVariables.swift
+
+      - name: Clean up design-system checkout
+        run: rm -rf design-system
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update design tokens to ${{ github.event.client_payload.version }}"
+          branch: chore/update-design-tokens-${{ github.event.client_payload.version }}
+          title: "chore: update design tokens to ${{ github.event.client_payload.version }}"
+          body: |
+            ## Design Token Update
+
+            | Field | Value |
+            |-------|-------|
+            | **New version** | `${{ github.event.client_payload.version }}` |
+            | **Previous version** | `${{ github.event.client_payload.previous_version }}` |
+            | **Design system commit** | [`${{ github.event.client_payload.sha }}`](https://github.com/amboss-mededu/amboss-design-system/commit/${{ github.event.client_payload.sha }}) |
+
+            ### Changed files
+            - `tokens/ios/DesignSystemColorTokens.swift`
+            - `tokens/ios/DesignSystemVariables.swift`
+
+            ---
+            *This PR was created automatically by the design token sync workflow.*
+          labels: design-tokens,automated
+          delete-branch: true
