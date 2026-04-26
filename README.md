@@ -1,105 +1,125 @@
-# Mobile Token Sync POC
+# Mobile Design System Sync POC
 
-Proof of concept for automatically syncing design tokens from
+Proof of concept for automatically syncing design tokens and icons from
 [amboss-design-system](https://github.com/amboss-mededu/amboss-design-system)
-to mobile repositories via GitHub Actions.
+to mobile repositories via GitHub Actions and tarball release assets.
 
 ## How It Works
 
 ```
-amboss-design-system                     mobile repo (this POC)
-┌─────────────────────┐                  ┌─────────────────────────┐
-│ PR merged to main   │                  │                         │
-│ with version bump   │                  │  repository_dispatch    │
-│ in tokens-ios or    │ ──dispatch────▶  │  workflow triggers:     │
-│ tokens-android      │                  │  1. checkout DS at SHA  │
-│ package.json        │                  │  2. copy token files    │
-│                     │                  │  3. open PR             │
-└─────────────────────┘                  └─────────────────────────┘
+amboss-design-system                          mobile repo (this POC)
+┌────────────────────────┐                    ┌──────────────────────────────┐
+│ PR merged with release │                    │                              │
+│ label → CircleCI bumps │                    │   repository_dispatch        │
+│ DS version, builds 4   │                    │   (design-<package>-update)  │
+│ tarballs, uploads them │ ──dispatch event──▶│                              │
+│ as GH release assets   │                    │   1. download tarball        │
+│ (auto release)         │                    │   2. wipe target dir         │
+│                        │                    │   3. unpack into target      │
+│ release: published →   │                    │   4. open PR                 │
+│ dispatch-mobile-on-    │                    │                              │
+│ release.yml            │                    │                              │
+└────────────────────────┘                    └──────────────────────────────┘
 ```
 
 ### Dispatcher (design-system side)
 
-Workflow: `.github/workflows/trigger-token-sync-mobile.yml`
+Workflow: [`.github/workflows/dispatch-mobile-on-release.yml`](https://github.com/amboss-mededu/amboss-design-system/blob/main/.github/workflows/dispatch-mobile-on-release.yml)
 
-- Triggers on push to `main` when `packages/tokens-ios/package.json` or
-  `packages/tokens-android/package.json` changes
-- Compares the `version` field before/after the merge
-- If the version changed, dispatches a `design-tokens-update` event to the
-  corresponding mobile repo with payload:
+- Triggers on `release: published` (created by CircleCI `release-and-publish`
+  via `auto release`)
+- For each sub-package matrix entry (`tokens-ios`, `tokens-android`,
+  `icons-ios`, `icons-android`), looks up the matching `<package>-<version>.tgz`
+  asset on the release
+- Dispatches a `design-<package>-update` event with payload:
   ```json
   {
+    "package": "tokens-ios",
     "version": "0.2.0",
-    "previous_version": "0.1.0",
-    "sha": "abc123..."
+    "asset_name": "tokens-ios-0.2.0.tgz",
+    "asset_url": "https://github.com/.../releases/download/v3.43.3/tokens-ios-0.2.0.tgz",
+    "ds_tag": "v3.43.3",
+    "ds_release_url": "https://github.com/.../releases/tag/v3.43.3"
   }
   ```
 
 ### Receiver (mobile repo side)
 
-Workflow: `.github/workflows/design-token-sync.yml`
+Workflow: `.github/workflows/design-system-sync.yml`
 
-- Triggers on `repository_dispatch` event type `design-tokens-update`
-- Checks out `amboss-design-system` at the exact SHA from the payload
-  (uses sparse checkout for speed)
-- Copies token files to the target paths defined in the workflow
-- Creates a PR via `peter-evans/create-pull-request`
+- Triggers on `repository_dispatch` events of type `design-tokens-ios-update`
+  or `design-icons-ios-update` (one workflow handles all sub-packages this
+  repo consumes)
+- Resolves the target directory based on the `package` field in the payload
+- Downloads the tarball asset directly from the GH release using a PAT
+- Wipes the target directory and unpacks the tarball into it (so removed or
+  renamed files don't leave orphans)
+- Opens a PR via `peter-evans/create-pull-request`
 
 ## Testing the POC
 
 ### Prerequisites
 
 - A GitHub PAT with `repo` scope, stored as `MOBILE_REPOS_ACCESS_TOKEN` secret
-  in the `amboss-design-system` repo
+  in **both** repos (the dispatcher needs it to send events to private mobile
+  repos; the receiver needs it to download release assets from the private
+  design-system repo)
 
 ### Steps
 
-1. In `amboss-design-system`, merge the branch `chore/mobile-token-sync-dispatch`
-   to `main`
-2. Create a PR in `amboss-design-system` that bumps the version in
-   `packages/tokens-ios/package.json` (e.g., `0.1.0` -> `0.2.0`)
-3. Merge that PR to `main`
-4. The dispatcher workflow runs, detects the version change, and dispatches
-   to this POC repo
-5. This repo's workflow creates a PR with the updated token files
+1. In `amboss-design-system`, open a PR that:
+   - Touches `assets/icons/*.svg` (auto-bumps `packages/icons-*/package.json`)
+     and/or `packages/design-tokens/src/**` (auto-bumps `packages/tokens-*/package.json`)
+   - Has a release label (`patch` / `minor` / `major`)
+2. Merge the PR
+3. CircleCI `release-and-publish` runs, creates the DS release, builds 4
+   tarballs, and uploads them as release assets
+4. `dispatch-mobile-on-release.yml` fires on `release: published`, finds the
+   matching tarballs, dispatches one event per sub-package
+5. This POC's `design-system-sync.yml` runs once per dispatched event, opens a
+   PR with the updated files
 
 ### Manual trigger for testing
 
-You can also trigger the receiver workflow manually using the GitHub CLI:
+You can dispatch the event manually using the GitHub CLI. Use a real release
+tag and asset URL from the design-system repo.
 
 ```bash
 gh api repos/amboss-mededu/mobile-token-sync-poc/dispatches \
-  -f event_type=design-tokens-update \
+  -f event_type=design-tokens-ios-update \
+  -f 'client_payload[package]=tokens-ios' \
   -f 'client_payload[version]=0.2.0' \
-  -f 'client_payload[previous_version]=0.1.0' \
-  -f 'client_payload[sha]=<commit-sha-from-design-system>'
+  -f 'client_payload[asset_name]=tokens-ios-0.2.0.tgz' \
+  -f 'client_payload[asset_url]=https://github.com/amboss-mededu/amboss-design-system/releases/download/v3.43.3/tokens-ios-0.2.0.tgz' \
+  -f 'client_payload[ds_tag]=v3.43.3' \
+  -f 'client_payload[ds_release_url]=https://github.com/amboss-mededu/amboss-design-system/releases/tag/v3.43.3'
 ```
 
 ## Adapting for Your Repo
 
 To use this in your actual mobile repo:
 
-1. Copy `.github/workflows/design-token-sync.yml` to your repo
-2. Edit the **file mapping** section in the "Copy token files" step to match
-   your repo's directory structure
-3. Update the `sparse-checkout` to match your platform (`tokens-ios` or
-   `tokens-android`)
-4. Update the PR body to list your actual target files
-5. Create the `design-tokens` and `automated` labels in your repo (optional)
+1. Copy `.github/workflows/design-system-sync.yml`
+2. Edit the **target-path mapping** in the "Resolve target paths" step so each
+   sub-package lands in the right directory of your project (e.g.
+   `DesignSystem/Resources/Tokens/` for iOS, `app/src/main/res/drawable/` for
+   Android)
+3. Add or remove `repository_dispatch` event types in the `on:` block depending
+   on which sub-packages you consume (e.g. drop `design-icons-ios-update` if
+   you don't ship icons)
+4. Create the labels referenced in the PR body (`design-tokens`, `design-icons`,
+   `automated`) in your repo, or replace with labels you already use
 
-### iOS example paths
+### iOS target paths (example)
 
-```bash
-cp design-system/packages/tokens-ios/Sources/AmbossDesignTokens/DesignSystemColorTokens.swift \
-   DesignSystem/DesignSystem/Resources/Token/DesignSystemColorTokens.swift
-```
+| Package | Tarball contents | Suggested target |
+|---------|------------------|------------------|
+| `tokens-ios` | `Sources/AmbossDesignTokens/*.swift`, `package.json` | `DesignSystem/Resources/Tokens/` |
+| `icons-ios` | `*.imageset/Contents.json`, `*.imageset/*.pdf`, `package.json` | `DesignSystem/Resources/Assets.xcassets/AmbossIcons/` |
 
-### Android example paths
+### Android target paths (example)
 
-```bash
-cp design-system/packages/tokens-android/compose/ColorTokens.kt \
-   shared-ui/src/main/java/de/miamed/amboss/shared/ui/compose/ColorTokens.kt
-
-cp design-system/packages/tokens-android/xml/design_system_color.xml \
-   shared-ui/src/main/res/values/design_system_color.xml
-```
+| Package | Tarball contents | Suggested target |
+|---------|------------------|------------------|
+| `tokens-android` | `xml/*.xml`, `compose/*.kt`, `package.json` | `shared-ui/src/main/` (split into `res/values/` and `java/.../compose/`) |
+| `icons-android` | `ic_*.xml`, `package.json` | `app/src/main/res/drawable/` |
