@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Do not edit directly -->
+
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="UnusedResources">
+  <dimen name="dimension_icon_s">16dp</dimen>
+  <dimen name="dimension_icon_m">24dp</dimen>
+  <dimen name="dimension_icon_l">48dp</dimen>
+  <dimen name="dimension_content_maxWidth">944dp</dimen>
+  <dimen name="letterSpacing_none">0dp</dimen>
+  <dimen name="letterSpacing_s">0.5dp</dimen>
+  <dimen name="letterSpacing_m">1dp</dimen>
+  <dimen name="font_xs">12sp</dimen>
+  <dimen name="font_s">14sp</dimen>
+  <dimen name="font_m">16sp</dimen>
+  <dimen name="font_l">18sp</dimen>
+  <dimen name="font_xl">20sp</dimen>
+  <dimen name="font_xxl">24sp</dimen>
+  <dimen name="font_xxxl">26sp</dimen>
+  <dimen name="spacing_zero">0dp</dimen>
+  <dimen name="spacing_xxxs">2dp</dimen>
+  <dimen name="spacing_xxs">4dp</dimen>
+  <dimen name="spacing_xs">8dp</dimen>
+  <dimen name="spacing_s">12dp</dimen>
+  <dimen name="spacing_m">16dp</dimen>
+  <dimen name="spacing_l">24dp</dimen>
+  <dimen name="spacing_xl">32dp</dimen>
+  <dimen name="spacing_xxl">48dp</dimen>
+  <dimen name="borderRadius_none">0dp</dimen>
+  <dimen name="borderRadius_xs">4dp</dimen>
+  <dimen name="borderRadius_s">8dp</dimen>
+  <dimen name="borderRadius_m">12dp</dimen>
+  <dimen name="borderRadius_l">16dp</dimen>
+  <dimen name="borderRadius_xl">24dp</dimen>
+  <dimen name="borderRadius_full">9999dp</dimen>
+  <dimen name="elevation_level_none">0dp</dimen>
+  <dimen name="elevation_level_a">1dp</dimen>
+  <dimen name="elevation_level_b">3dp</dimen>
+  <dimen name="elevation_level_c">6dp</dimen>
+  <dimen name="elevation_level_d">12dp</dimen>
+  <dimen name="background_disabled">0.25</dimen>
+  <dimen name="background_enabled">1</dimen>
+  
+</resources>
